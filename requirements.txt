@@ -1,0 +1,8 @@
+aiogram>=3.13
+python-dotenv>=1.0
+numpy
+librosa
+Pillow
+playwright
+openai-whisper
+requests

@@ -1,0 +1,73 @@
+name: bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */5 * * *'
+
+concurrency:
+  group: bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      PYTHONUNBUFFERED: "1"
+      WHISPER_MODEL: small
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: System deps (ffmpeg)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Python deps
+        run: pip install -r requirements.txt
+
+      - name: Cache playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-v1
+
+      - name: Install chromium
+        run: python -m playwright install --with-deps chromium
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/whisper
+          key: whisper-${{ env.WHISPER_MODEL }}-v1
+
+      - name: Restore Pinterest cache
+        uses: actions/cache@v4
+        with:
+          path: _pin_cache
+          key: pins-v1-${{ github.run_id }}
+          restore-keys: pins-v1-
+
+      - name: Run bot
+        run: |
+          set +e
+          timeout --signal=SIGINT 19800 python bot.py
+          echo "bot exited with code $?"
+
+      - name: Chain next run
+        if: always()
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/bot.yml/dispatches" \
+            -d '{"ref":"main"}'

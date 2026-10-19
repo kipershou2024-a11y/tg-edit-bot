@@ -1,0 +1,8 @@
+services:
+  bot:
+    build: .
+    image: tg-edit-bot
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - ./_pin_cache:/app/_pin_cache
