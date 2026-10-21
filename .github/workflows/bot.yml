@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: _pin_cache
-          key: pins-v1-${{ github.run_id }}
+          key: pins-v1
           restore-keys: pins-v1-
 
       - name: Run bot
