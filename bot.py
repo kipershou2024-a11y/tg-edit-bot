@@ -143,6 +143,12 @@ async def on_audio(message: Message, bot: Bot):
         return
 
     uid = message.from_user.id
+    prev = JOBS.get(uid)
+    if prev and prev.get("busy"):
+        await message.reply("Ещё собираю твой предыдущий клип, дождись окончания.")
+        return
+    if prev and prev.get("dir"):
+        shutil.rmtree(prev["dir"], ignore_errors=True)
     jobdir = os.path.join(BASE, "jobs", f"{uid}_{uuid.uuid4().hex[:6]}")
     os.makedirs(jobdir, exist_ok=True)
     ext = guess_ext(file, getattr(file, "mime_type", None))
@@ -228,17 +234,32 @@ def main():
         print("  BOT_TOKEN=123456:ABC-DEF...")
         sys.exit(1)
 
-    bot = Bot(TOKEN)
-    dp = Dispatcher()
-    dp.message.register(start, CommandStart())
-    dp.message.register(start, Command("help"))
-    dp.message.register(on_audio, F.audio | F.voice | F.document)
-    dp.callback_query.register(cb_mood, F.data.startswith("mood:"))
-    dp.callback_query.register(cb_lyr, F.data == "lyr")
-    dp.callback_query.register(cb_go, F.data == "go")
+    while True:
+        try:
+            bot = Bot(TOKEN)
+            dp = Dispatcher()
+            dp.message.register(start, CommandStart())
+            dp.message.register(start, Command("help"))
+            dp.message.register(on_audio, F.audio | F.voice | F.document)
+            dp.callback_query.register(cb_mood, F.data.startswith("mood:"))
+            dp.callback_query.register(cb_lyr, F.data == "lyr")
+            dp.callback_query.register(cb_go, F.data == "go")
 
-    print("tg_edit_bot запущен (polling)…")
-    asyncio.run(dp.start_polling(bot))
+            print("tg_edit_bot запущен (polling)…", flush=True)
+            asyncio.run(dp.start_polling(bot))
+            break
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as e:
+            msg = str(e)
+            print("polling error:", msg, flush=True)
+            if "Conflict" in msg or "terminated by other" in msg:
+                print("Другой инстанс бота уже запущен — завершаюсь.")
+                sys.exit(0)
+            try:
+                asyncio.run(asyncio.sleep(10))
+            except RuntimeError:
+                time.sleep(10)
 
 
 if __name__ == "__main__":
