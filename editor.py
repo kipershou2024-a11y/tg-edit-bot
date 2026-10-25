@@ -1,4 +1,4 @@
-import os
+﻿import os
 import shutil
 import subprocess
 import sys
@@ -32,7 +32,7 @@ def probe_duration(path):
     try:
         return float((r.stdout or "").strip())
     except ValueError:
-        raise RuntimeError("не удалось прочитать аудио")
+        raise RuntimeError("Failed to parse duration")
 
 
 def extract_wav(src, wav):
@@ -91,6 +91,7 @@ def plan_cuts(beat_times, energy, duration):
 
 def prep_images(files, outdir):
     from PIL import Image
+    import random
 
     os.makedirs(outdir, exist_ok=True)
     out = []
@@ -107,10 +108,16 @@ def prep_images(files, outdir):
         else:
             nw, nh = w, int(w / tr)
             x0, y0 = 0, max(0, (h - nh) // 2)
-        img = img.crop((x0, y0, x0 + nw, y0 + nh)).resize((PW, PH), Image.LANCZOS)
+        random.seed(int(os.urandom(4).hex(), 16))
+        offset_x = random.randint(-120, 120)
+        offset_y = random.randint(-120, 120)
+        nx0 = max(0, min(w - nw, x0 + offset_x))
+        ny0 = max(0, min(h - nh, y0 + offset_y))
+        cropped = img.crop((nx0, ny0, nx0 + nw, ny0 + nh))
         p = os.path.join(outdir, f"p_{idx:02d}.png")
-        img.save(p)
+        cropped.resize((PW, PH), Image.LANCZOS).save(p)
         out.append(p)
+    random.shuffle(out)
     return out
 
 
@@ -125,7 +132,7 @@ def build_segments(cuts, imgs, tmpdir, progress=None):
         dur = n / FPS
         img = imgs[k % len(imgs)]
         out = os.path.join(tmpdir, f"seg_{k:03d}.mp4")
-        p = k % 4
+        random.seed(int(os.urandom(4).hex(), 16)); p = random.randint(0, 3)
         if p == 0:
             zm = f"z='1+0.12*on/{n}':x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2'"
         elif p == 1:
@@ -162,12 +169,12 @@ def transcribe(wav, progress=None):
     if _whisper_model is None:
         name = os.environ.get("WHISPER_MODEL", "small")
         if progress:
-            progress(None, f"Загружаю модель Whisper ({name})…")
+            progress(None, f"Загружаю модель Whisper ({name}):")
         _whisper_model = whisper.load_model(name)
     if progress:
-        progress(None, "Распознаю текст песни…")
+        progress(None, "Транскрибирую аудио:")
     return _whisper_model.transcribe(wav, language="ru", word_timestamps=True,
-                                     initial_prompt="Текст песни, русский язык.")
+                                     initial_prompt="Переведи текст песни.")
 
 
 def group_lines(result, max_chars=34, max_dur=3.2, max_gap=0.65):
@@ -210,7 +217,8 @@ WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, 
+StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Arial,66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,2,2,60,60,340,1
 Style: Chorus,Impact,84,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,6,3,2,60,60,330,1
 
@@ -242,10 +250,10 @@ def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progres
     grade = (f"[bg]eq=contrast=1.06:saturation=0.90:brightness=-0.015,"
              f"vignette=PI/5,noise=alls=3:allf=t,"
              f"fade=t=out:st={fade:.2f}:d=0.5[v0]")
-    tail = "[v0]ass=subs.ass[v]" if has_ass else "[v0]null[v]"
+    tail = "[v0]ass.subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
     if progress:
-        progress(92, "Финальная сборка…")
+        progress(92, "Финальная сборка...")
     run_ffmpeg(["ffmpeg", "-y", "-i", base, "-i", grad, "-i", audio_src,
                 "-filter_complex", fc,
                 "-map", "[v]", "-map", "2:a",
@@ -262,45 +270,46 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
     tmp = os.path.join(job_dir, "tmp")
     os.makedirs(tmp, exist_ok=True)
 
-    progress(3, "Готовлю аудио…")
+    progress(3, "Готовлю аудио...")
     duration = probe_duration(audio_src)
     if duration < 3:
-        raise RuntimeError("трек слишком короткий")
+        raise RuntimeError("Аудио слишком короткое")
     if duration > 660:
-        raise RuntimeError("трек длиннее 11 минут — не потяну")
+        raise RuntimeError("Аудио длиннее 11 минут - не поддерживается")
     wav = extract_wav(audio_src, os.path.join(tmp, "track.wav"))
 
-    progress(6, "Анализирую биты…")
+    progress(6, "Анализирую биты...")
     beats, energy, tempo = analyze(wav, duration)
     cuts = plan_cuts(beats, energy, duration)
 
     ass_path = os.path.join(tmp, "subs.ass")
     has_ass = False
     if with_lyrics:
-        progress(14, "Распознаю текст песни…")
+        progress(14, "Распознаю текст песни...")
         res = transcribe(wav, progress)
         lines = group_lines(res)
         if lines:
             write_ass(lines, ass_path)
             has_ass = True
-        progress(36, "Текст готов")
-    else:
         progress(36, "Биты посчитаны")
+    else:
+        progress(36, "Без текста")
 
-    progress(38, "Ищу картинки…")
+    progress(38, "Ищу картинки...")
     cache = pin_cache or os.path.join(job_dir, "pins")
-    files = __import__("pinterest_fetch").fetch(mood, 16, cache, job_dir, progress)
+    import pinterest_fetch
+    files = pinterest_fetch.fetch(mood, 16, cache, job_dir, progress)
     if len(files) < 4:
-        raise RuntimeError("не удалось собрать картинки")
+        raise RuntimeError("Не удалось найти картинки")
 
-    progress(50, "Кадрирую картинки…")
+    progress(50, "Кадрирую картинки...")
     imgs = prep_images(files, os.path.join(tmp, "prepared"))
     if len(imgs) < 4:
-        raise RuntimeError("не удалось подготовить картинки")
+        raise RuntimeError("Не удалось обработать картинки")
 
     segs = build_segments(cuts, imgs, tmp, progress)
 
-    progress(85, "Склеиваю…")
+    progress(85, "Склеиваю...")
     base = concat(segs, tmp)
     grad = os.path.join(tmp, "gradient.png")
     make_gradient(grad)
