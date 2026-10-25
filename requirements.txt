@@ -6,3 +6,4 @@ Pillow
 playwright
 openai-whisper
 requests
+yt-dlp

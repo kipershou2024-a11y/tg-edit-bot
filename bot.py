@@ -23,7 +23,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
 import editor
-from pinterest_fetch import MOODS
+from video_fetch import MOODS
 
 load_dotenv(os.path.join(BASE, ".env"))
 TOKEN = (os.getenv("BOT_TOKEN") or "").strip()
