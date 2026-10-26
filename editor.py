@@ -237,12 +237,12 @@ def make_gradient(path):
 
 def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb):
     dur = max(duration, 1.0)
-    limit_bytes = int(target_mb * 1000 * 1000)
-    target_kbps = max(600, int(limit_bytes * 8 / dur / 1000))
-    mr = min(target_kbps, 4200)
-    buf = int(mr * 1.5)
+    # target_mb — желаемый размер в ДЕСЯТИЧНЫХ МБ (Telegram limit = 50_000_000 байт)
+    budget_kbps = int(target_mb * 1000 * 1000 * 8 / dur / 1000)
+    mr = max(2500, min(budget_kbps, 7500))  # 2.5..7.5 Mbps ceiling
+    buf = int(mr * 2)
     fade = max(dur - 0.4, 0.1)
-    grade = (f"[bg]eq=contrast=1.0:saturation=1.0:brightness=-0.02,"
+    grade = (f"[bg]eq=contrast=1.04:saturation=1.05,"
              f"fade=t=out:st={fade:.2f}:d=0.4[v0]")
     tail = "[v0]ass.subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
@@ -250,21 +250,25 @@ def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, ta
                 "-filter_complex", fc,
                 "-map", "[v]", "-map", "2:a",
                 "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-                "-c:v", "libx264", "-crf", "27", "-preset", "veryfast",
+                "-c:v", "libx264", "-crf", "23", "-preset", "medium",
                 "-maxrate", f"{mr}k", "-bufsize", f"{buf}k",
-                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart", "-shortest", out_path], cwd=tmpdir)
     return out_path
 
 
 def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None):
     dur = max(duration, 1.0)
-    safe_limit = int(47 * 1000 * 1000)
-    for attempt, target_mb in enumerate((44, 38, 30, 24), 1):
+    safe_limit = int(48 * 1000 * 1000)
+    for attempt, target_mb in enumerate((45, 40, 35, 28), 1):
         if progress:
             progress(92, "Сжатие под Telegram ({0} MB)...".format(target_mb))
-        _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
-        if os.path.getsize(out_path) <= safe_limit:
+        try:
+            _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
+        except Exception:
+            if attempt > 2:
+                raise
+        if os.path.exists(out_path) and os.path.getsize(out_path) <= safe_limit:
             return out_path
     return out_path
 
