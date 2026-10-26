@@ -108,7 +108,16 @@ async def run_job(uid, snap, prog):
         cap = f"🎬 {snap['title'] or 'edit'} · {res['tempo']:.0f} BPM"
         if snap["lyrics"]:
             cap += " · с текстом"
-        await prog.answer_video(FSInputFile(res["out"]), caption=cap[:250])
+        outs = res.get("outs") or [res["out"]]
+        if len(outs) == 1:
+            await prog.answer_video(FSInputFile(outs[0]), caption=cap[:250])
+        else:
+            await prog.answer_text(
+                f"📦 Разбил на {len(outs)} частей (по ≤48 МБ):")
+            for i, p in enumerate(outs, 1):
+                await prog.answer_video(
+                    FSInputFile(p),
+                    caption=f"{cap[:200]} · часть {i}/{len(outs)}")
     except Exception as e:
         state["done"] = True
         traceback.print_exc()

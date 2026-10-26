@@ -257,21 +257,37 @@ def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, ta
     return out_path
 
 
-def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None):
+def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None, target_mb=46):
     dur = max(duration, 1.0)
-    safe_limit = int(48 * 1000 * 1000)
-    for attempt, target_mb in enumerate((45, 40, 35, 28), 1):
-        if progress:
-            progress(92, "Сжатие под Telegram ({0} MB)...".format(target_mb))
-        try:
-            _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
-        except Exception:
-            if attempt > 2:
-                raise
-        if os.path.exists(out_path) and os.path.getsize(out_path) <= safe_limit:
-            return out_path
+    if progress:
+        progress(92, "Final render ({0}MB target)...".format(target_mb))
+    _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
     return out_path
 
+
+def split_video(path, tmpdir, part_bytes=47000000):
+    if not os.path.exists(path):
+        return [path]
+    size = os.path.getsize(path)
+    if size <= part_bytes:
+        return [path]
+    dur = probe_duration(path)
+    n = (size + part_bytes - 1) // part_bytes
+    n = max(2, min(int(n), 8))
+    chunk = dur / n
+    outs = []
+    for i in range(n):
+        ss = i * chunk
+        to = dur if i == n - 1 else (i + 1) * chunk
+        outp = os.path.join(tmpdir, "part_{0:02d}.mp4".format(i + 1))
+        run_ffmpeg(["ffmpeg", "-y", "-ss", "{0:.3f}".format(ss),
+                    "-to", "{0:.3f}".format(to),
+                    "-i", path, "-c", "copy",
+                    "-reset_timestamps", "1", "-movflags", "+faststart",
+                    outp], cwd=tmpdir)
+        if os.path.exists(outp):
+            outs.append(outp)
+    return outs if outs else [path]
 
 
 def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
@@ -320,8 +336,11 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
     make_gradient(grad)
 
     out_path = os.path.join(job_dir, "edit.mp4")
-    finalize(base, audio_src, grad, has_ass, duration, out_path, tmp, progress)
+    target_mb = max(24, int(duration * 0.45))
+    finalize(base, audio_src, grad, has_ass, duration, out_path, tmp, progress, target_mb)
+    progress(96, "Разбиваю при необходимости...")
+    parts = split_video(out_path, tmp, 47000000)
     progress(100, "Готово!")
-    return {"out": out_path, "tempo": tempo, "duration": duration}
+    return {"out": out_path, "outs": parts, "tempo": tempo, "duration": duration}
 
 
