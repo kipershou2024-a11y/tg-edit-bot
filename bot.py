@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import os
 import shutil
 import sys
@@ -32,13 +32,13 @@ JOBS = {}
 LOCK = asyncio.Lock()
 
 WELCOME = (
-    "🎬 <b>Edit-бот Pro</b>\n\n"
-    "Пришли трек (mp3, m4a, ogg, wav или голосовое) — я соберу под него "
-    "профессиональный вертикальный VIDEO-edit: нарезка кадров строго "
-    "по битам и ударам, динамичные переходы со вспышками, кинематичный "
-    "цвет, по желанию — текст песни kinetic-субтитрами.\n\n"
-    "Дальше: выбери настроение → «Собрать».\n"
-    "Лимит файла: 20 МБ, длина до 11 минут."
+    "рџЋ¬ <b>Edit-Р±РѕС‚ Pro</b>\n\n"
+    "РџСЂРёС€Р»Рё С‚СЂРµРє (mp3, m4a, ogg, wav РёР»Рё РіРѕР»РѕСЃРѕРІРѕРµ) вЂ” СЏ СЃРѕР±РµСЂСѓ РїРѕРґ РЅРµРіРѕ "
+    "РїСЂРѕС„РµСЃСЃРёРѕРЅР°Р»СЊРЅС‹Р№ РІРµСЂС‚РёРєР°Р»СЊРЅС‹Р№ VIDEO-edit: РЅР°СЂРµР·РєР° РєР°РґСЂРѕРІ СЃС‚СЂРѕРіРѕ "
+    "РїРѕ Р±РёС‚Р°Рј Рё СѓРґР°СЂР°Рј, РґРёРЅР°РјРёС‡РЅС‹Рµ РїРµСЂРµС…РѕРґС‹ СЃРѕ РІСЃРїС‹С€РєР°РјРё, РєРёРЅРµРјР°С‚РёС‡РЅС‹Р№ "
+    "С†РІРµС‚, РїРѕ Р¶РµР»Р°РЅРёСЋ вЂ” С‚РµРєСЃС‚ РїРµСЃРЅРё kinetic-СЃСѓР±С‚РёС‚СЂР°РјРё.\n\n"
+    "Р”Р°Р»СЊС€Рµ: РІС‹Р±РµСЂРё РЅР°СЃС‚СЂРѕРµРЅРёРµ в†’ В«РЎРѕР±СЂР°С‚СЊВ».\n"
+    "Р›РёРјРёС‚ С„Р°Р№Р»Р°: 20 РњР‘, РґР»РёРЅР° РґРѕ 11 РјРёРЅСѓС‚."
 )
 
 
@@ -48,13 +48,13 @@ def kb(uid):
     lyr = job.get("lyrics", False)
     keys = list(MOODS.items())
     rows = [
-        [InlineKeyboardButton(text=("✅ " if mood == k else "") + v["label"],
+        [InlineKeyboardButton(text=("вњ… " if mood == k else "") + v["label"],
                               callback_data=f"mood:{k}") for k, v in keys[:2]],
-        [InlineKeyboardButton(text=("✅ " if mood == k else "") + v["label"],
+        [InlineKeyboardButton(text=("вњ… " if mood == k else "") + v["label"],
                               callback_data=f"mood:{k}") for k, v in keys[2:4]],
-        [InlineKeyboardButton(text=("📝 Текст: " + ("вкл" if lyr else "выкл")),
+        [InlineKeyboardButton(text=("рџ“ќ РўРµРєСЃС‚: " + ("РІРєР»" if lyr else "РІС‹РєР»")),
                               callback_data="lyr")],
-        [InlineKeyboardButton(text="🎬 Собрать", callback_data="go")],
+        [InlineKeyboardButton(text="рџЋ¬ РЎРѕР±СЂР°С‚СЊ", callback_data="go")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -94,7 +94,7 @@ async def run_job(uid, snap, prog):
         if p >= 100 or now - state["last"] >= 1.5:
             state["last"] = now
             asyncio.run_coroutine_threadsafe(
-                safe_edit(prog, f"⏳ {max(p, 0)}% — {stage}"), loop)
+                safe_edit(prog, f"вЏі {max(p, 0)}% вЂ” {stage}"), loop)
 
     try:
         async with LOCK:
@@ -104,25 +104,25 @@ async def run_job(uid, snap, prog):
                 os.path.join(BASE, "_pin_cache", snap["mood"]))
         state["done"] = True
         await prog.edit_text(
-            f"✅ Готово · {res['tempo']:.0f} BPM · {int(res['duration'])} сек")
-        cap = f"🎬 {snap['title'] or 'edit'} · {res['tempo']:.0f} BPM"
+            f"вњ… Р“РѕС‚РѕРІРѕ В· {res['tempo']:.0f} BPM В· {int(res['duration'])} СЃРµРє")
+        cap = f"рџЋ¬ {snap['title'] or 'edit'} В· {res['tempo']:.0f} BPM"
         if snap["lyrics"]:
-            cap += " · с текстом"
+            cap += " В· СЃ С‚РµРєСЃС‚РѕРј"
         outs = res.get("outs") or [res["out"]]
         if len(outs) == 1:
             await prog.answer_video(FSInputFile(outs[0]), caption=cap[:250])
         else:
-            await prog.answer_text(
-                f"📦 Разбил на {len(outs)} частей (по ≤48 МБ):")
+            await prog.answer(
+                f"рџ“¦ Р Р°Р·Р±РёР» РЅР° {len(outs)} С‡Р°СЃС‚РµР№ (РїРѕ в‰¤48 РњР‘):")
             for i, p in enumerate(outs, 1):
                 await prog.answer_video(
                     FSInputFile(p),
-                    caption=f"{cap[:200]} · часть {i}/{len(outs)}")
+                    caption=f"{cap[:200]} В· С‡Р°СЃС‚СЊ {i}/{len(outs)}")
     except Exception as e:
         state["done"] = True
         traceback.print_exc()
         try:
-            await prog.edit_text(f"❌ Ошибка: {e}")
+            await prog.edit_text(f"вќЊ РћС€РёР±РєР°: {e}")
         except Exception:
             pass
     finally:
@@ -148,14 +148,14 @@ async def on_audio(message: Message, bot: Bot):
         return
 
     if (file.file_size or 0) > 19 * 1024 * 1024:
-        await message.reply("Файл больше 19 МБ — Telegram не даст его скачать. "
-                            "Сожми трек и пришли снова.")
+        await message.reply("Р¤Р°Р№Р» Р±РѕР»СЊС€Рµ 19 РњР‘ вЂ” Telegram РЅРµ РґР°СЃС‚ РµРіРѕ СЃРєР°С‡Р°С‚СЊ. "
+                            "РЎРѕР¶РјРё С‚СЂРµРє Рё РїСЂРёС€Р»Рё СЃРЅРѕРІР°.")
         return
 
     uid = message.from_user.id
     prev = JOBS.get(uid)
     if prev and prev.get("busy"):
-        await message.reply("Ещё собираю твой предыдущий клип, дождись окончания.")
+        await message.reply("Р•С‰С‘ СЃРѕР±РёСЂР°СЋ С‚РІРѕР№ РїСЂРµРґС‹РґСѓС‰РёР№ РєР»РёРї, РґРѕР¶РґРёСЃСЊ РѕРєРѕРЅС‡Р°РЅРёСЏ.")
         return
     if prev and prev.get("dir"):
         shutil.rmtree(prev["dir"], ignore_errors=True)
@@ -169,7 +169,7 @@ async def on_audio(message: Message, bot: Bot):
         await bot.download_file(tg_file.file_path, destination=path)
     except Exception as e:
         shutil.rmtree(jobdir, ignore_errors=True)
-        await message.reply(f"Не смог скачать файл: {e}")
+        await message.reply(f"РќРµ СЃРјРѕРі СЃРєР°С‡Р°С‚СЊ С„Р°Р№Р»: {e}")
         return
 
     title = None
@@ -180,20 +180,20 @@ async def on_audio(message: Message, bot: Bot):
 
     JOBS[uid] = {"dir": jobdir, "path": path, "mood": "dark",
                  "lyrics": False, "title": title, "busy": False}
-    await message.reply("Трек принят. Выбирай настроение 👇", reply_markup=kb(uid))
+    await message.reply("РўСЂРµРє РїСЂРёРЅСЏС‚. Р’С‹Р±РёСЂР°Р№ РЅР°СЃС‚СЂРѕРµРЅРёРµ рџ‘‡", reply_markup=kb(uid))
 
 
 async def cb_mood(cb: CallbackQuery):
     uid = cb.from_user.id
     job = JOBS.get(uid)
     if not job:
-        await cb.answer("Сначала пришли трек", show_alert=True)
+        await cb.answer("РЎРЅР°С‡Р°Р»Р° РїСЂРёС€Р»Рё С‚СЂРµРє", show_alert=True)
         return
     if job.get("busy"):
-        await cb.answer("Уже собираю этот трек", show_alert=True)
+        await cb.answer("РЈР¶Рµ СЃРѕР±РёСЂР°СЋ СЌС‚РѕС‚ С‚СЂРµРє", show_alert=True)
         return
     job["mood"] = cb.data.split(":", 1)[1]
-    await cb.answer("Ок")
+    await cb.answer("РћРє")
     try:
         await cb.message.edit_reply_markup(reply_markup=kb(uid))
     except Exception:
@@ -204,13 +204,13 @@ async def cb_lyr(cb: CallbackQuery):
     uid = cb.from_user.id
     job = JOBS.get(uid)
     if not job:
-        await cb.answer("Сначала пришли трек", show_alert=True)
+        await cb.answer("РЎРЅР°С‡Р°Р»Р° РїСЂРёС€Р»Рё С‚СЂРµРє", show_alert=True)
         return
     if job.get("busy"):
-        await cb.answer("Уже собираю этот трек", show_alert=True)
+        await cb.answer("РЈР¶Рµ СЃРѕР±РёСЂР°СЋ СЌС‚РѕС‚ С‚СЂРµРє", show_alert=True)
         return
     job["lyrics"] = not job["lyrics"]
-    await cb.answer("Текст: " + ("вкл" if job["lyrics"] else "выкл"))
+    await cb.answer("РўРµРєСЃС‚: " + ("РІРєР»" if job["lyrics"] else "РІС‹РєР»"))
     try:
         await cb.message.edit_reply_markup(reply_markup=kb(uid))
     except Exception:
@@ -221,25 +221,25 @@ async def cb_go(cb: CallbackQuery):
     uid = cb.from_user.id
     job = JOBS.get(uid)
     if not job:
-        await cb.answer("Сначала пришли трек", show_alert=True)
+        await cb.answer("РЎРЅР°С‡Р°Р»Р° РїСЂРёС€Р»Рё С‚СЂРµРє", show_alert=True)
         return
     if job.get("busy"):
-        await cb.answer("Уже собираю, подожди", show_alert=True)
+        await cb.answer("РЈР¶Рµ СЃРѕР±РёСЂР°СЋ, РїРѕРґРѕР¶РґРё", show_alert=True)
         return
     job["busy"] = True
     await cb.answer()
     snap = dict(job)
     try:
         prog = await cb.message.edit_text(
-            "⏳ 0% — Готовлю аудио…", reply_markup=None)
+            "вЏі 0% вЂ” Р“РѕС‚РѕРІР»СЋ Р°СѓРґРёРѕвЂ¦", reply_markup=None)
     except Exception:
-        prog = await cb.message.answer("⏳ 0% — Готовлю аудио…")
+        prog = await cb.message.answer("вЏі 0% вЂ” Р“РѕС‚РѕРІР»СЋ Р°СѓРґРёРѕвЂ¦")
     asyncio.create_task(run_job(uid, snap, prog))
 
 
 def main():
     if not TOKEN:
-        print("Нет BOT_TOKEN. Создай бота у @BotFather и запиши токен в файл .env:")
+        print("РќРµС‚ BOT_TOKEN. РЎРѕР·РґР°Р№ Р±РѕС‚Р° Сѓ @BotFather Рё Р·Р°РїРёС€Рё С‚РѕРєРµРЅ РІ С„Р°Р№Р» .env:")
         print(f"  {os.path.join(BASE, '.env')}")
         print("  BOT_TOKEN=123456:ABC-DEF...")
         sys.exit(1)
@@ -255,7 +255,7 @@ def main():
             dp.callback_query.register(cb_lyr, F.data == "lyr")
             dp.callback_query.register(cb_go, F.data == "go")
 
-            print("tg_edit_bot запущен (polling)…", flush=True)
+            print("tg_edit_bot Р·Р°РїСѓС‰РµРЅ (polling)вЂ¦", flush=True)
             asyncio.run(dp.start_polling(bot))
             break
         except (KeyboardInterrupt, SystemExit):
@@ -264,7 +264,7 @@ def main():
             msg = str(e)
             print("polling error:", msg, flush=True)
             if "Conflict" in msg or "terminated by other" in msg:
-                print("Другой инстанс бота уже запущен — завершаюсь.")
+                print("Р”СЂСѓРіРѕР№ РёРЅСЃС‚Р°РЅСЃ Р±РѕС‚Р° СѓР¶Рµ Р·Р°РїСѓС‰РµРЅ вЂ” Р·Р°РІРµСЂС€Р°СЋСЃСЊ.")
                 sys.exit(0)
             try:
                 asyncio.run(asyncio.sleep(10))
@@ -274,3 +274,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
