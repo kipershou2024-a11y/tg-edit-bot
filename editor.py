@@ -237,24 +237,25 @@ def make_gradient(path):
 
 def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None):
     dur = max(duration, 1.0)
-    # Жёсткий лимит 48 МБ (гарант <50 МБ даже с запасом)
-    budget_mb = 48
-    bitrate_kbps = int(budget_mb * 1024 * 8 / dur)
-    mr = max(3500, min(bitrate_kbps, 11000))  # ceiling 11 Мбит/с
-    fade = max(dur - 0.5, 0.1)
-    grade = (f"[bg]eq=contrast=1.04:saturation=1.05,"
-             f"fade=t=out:st={fade:.2f}:d=0.5[v0]")
+    # Жёсткий лимит 48 МБ — рассчитываем целевой битрейт из размера и длительности
+    target_mb = 46  # чуть ниже для безопасности
+    target_bitrate_kbps = max(800, int(target_mb * 1024 * 8 / dur))
+    mr = min(target_bitrate_kbps, 6000)  # ceiling 6 Мбит/с (вместо 11)
+    buf = int(mr * 1.5)
+    fade = max(dur - 0.4, 0.1)
+    grade = (f"[bg]eq=contrast=1.0:saturation=1.0,brightness=-0.02,"
+             f"fade=t=out:st={fade:.2f}:d=0.4[v0]")
     tail = "[v0]ass.subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
     if progress:
-        progress(92, "Финальный рендеринг Pro...")
+        progress(92, "Сжимаю к лимиту Telegram...")
     run_ffmpeg(["ffmpeg", "-y", "-i", base, "-i", grad, "-i", audio_src,
                 "-filter_complex", fc,
                 "-map", "[v]", "-map", "2:a",
                 "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-                "-c:v", "libx264", "-crf", "24", "-preset", "medium",
-                "-maxrate", f"{mr}k", "-bufsize", f"{int(mr*1.2)}k",
-                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+                "-c:v", "libx264", "-crf", "27", "-preset", "veryfast",
+                "-maxrate", f"{mr}k", "-bufsize", f"{buf}k",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
                 "-movflags", "+faststart", "-shortest", out_path], cwd=tmpdir)
     return out_path
 
