@@ -235,20 +235,17 @@ def make_gradient(path):
     g.save(path)
 
 
-def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None):
+def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb):
     dur = max(duration, 1.0)
-    # Жёсткий лимит 48 МБ — рассчитываем целевой битрейт из размера и длительности
-    target_mb = 46  # чуть ниже для безопасности
-    target_bitrate_kbps = max(800, int(target_mb * 1024 * 8 / dur))
-    mr = min(target_bitrate_kbps, 6000)  # ceiling 6 Мбит/с (вместо 11)
+    limit_bytes = int(target_mb * 1000 * 1000)
+    target_kbps = max(600, int(limit_bytes * 8 / dur / 1000))
+    mr = min(target_kbps, 4200)
     buf = int(mr * 1.5)
     fade = max(dur - 0.4, 0.1)
     grade = (f"[bg]eq=contrast=1.0:saturation=1.0,brightness=-0.02,"
              f"fade=t=out:st={fade:.2f}:d=0.4[v0]")
     tail = "[v0]ass.subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
-    if progress:
-        progress(92, "Сжимаю к лимиту Telegram...")
     run_ffmpeg(["ffmpeg", "-y", "-i", base, "-i", grad, "-i", audio_src,
                 "-filter_complex", fc,
                 "-map", "[v]", "-map", "2:a",
@@ -258,6 +255,19 @@ def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progres
                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
                 "-movflags", "+faststart", "-shortest", out_path], cwd=tmpdir)
     return out_path
+
+
+def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None):
+    dur = max(duration, 1.0)
+    safe_limit = int(47 * 1000 * 1000)
+    for attempt, target_mb in enumerate((44, 38, 30, 24), 1):
+        if progress:
+            progress(92, "Сжатие под Telegram ({0} MB)...".format(target_mb))
+        _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
+        if os.path.getsize(out_path) <= safe_limit:
+            return out_path
+    return out_path
+
 
 
 def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
