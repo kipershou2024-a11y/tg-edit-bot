@@ -244,7 +244,7 @@ def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, ta
     fade = max(dur - 0.4, 0.1)
     grade = (f"[bg]eq=contrast=1.04:saturation=1.05,"
              f"fade=t=out:st={fade:.2f}:d=0.4[v0]")
-    tail = "[v0]ass.subs.ass[v]" if has_ass else "[v0]null[v]"
+    tail = "[v0]ass=subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
     run_ffmpeg(["ffmpeg", "-y", "-i", base, "-i", grad, "-i", audio_src,
                 "-filter_complex", fc,
@@ -323,4 +323,5 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
     finalize(base, audio_src, grad, has_ass, duration, out_path, tmp, progress)
     progress(100, "Готово!")
     return {"out": out_path, "tempo": tempo, "duration": duration}
+
 
