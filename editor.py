@@ -31,7 +31,7 @@ def probe_duration(path):
     try:
         return float((r.stdout or "").strip())
     except ValueError:
-        raise RuntimeError("Не удалось прочитать длительность аудио")
+        raise RuntimeError("Failed to parse duration")
 
 
 def extract_wav(src, wav):
@@ -93,7 +93,6 @@ def build_segments(cuts, videos, tmpdir, progress=None):
     total = max(len(cuts) - 1, 1)
     tf = [int(round(c * FPS)) for c in cuts]
 
-    # Get durations of source videos
     v_durs = {}
     for v in videos:
         try:
@@ -106,49 +105,45 @@ def build_segments(cuts, videos, tmpdir, progress=None):
         if n < 5:
             n = 5
         dur = n / FPS
-        
+
         src_v = videos[k % len(videos)]
         v_len = v_durs.get(src_v, 10.0)
-        
-        # Pick random start time in source video
+
         max_start = max(0.0, v_len - dur - 0.1)
         start_t = random.uniform(0.0, max_start) if max_start > 0 else 0.0
 
-        out = os.path.join(tmpdir, f"seg_{k:03d}.mp4")
-        
-        # Pro editing video filters: crop/scale to 1080x1920, cinematic color grade, contrast, saturation, vignette, noise
+        out = os.path.join(tmpdir, "seg_{0:03d}.mp4".format(k))
         vf = (
-            f"scale=1080:1920:force_original_aspect_ratio=increase,"
-            f"crop=1080:1920,"
-            f"eq=contrast=1.08:saturation=1.15:brightness=-0.02,"
-            f"vignette=PI/4,"
-            f"noise=alls=4:allf=t"
+            "scale=1080:1920:force_original_aspect_ratio=increase,"
+            "crop=1080:1920,"
+            "eq=contrast=1.08:saturation=1.15:brightness=-0.02,"
+            "vignette=PI/4,"
+            "noise=alls=4:allf=t"
         )
         if dur <= 1.35:
             vf += ",fade=t=in:st=0:d=0.06:color=white"
-
         cmd = [
             "ffmpeg", "-y",
-            "-ss", f"{start_t:.2f}",
+            "-ss", "{0:.2f}".format(start_t),
             "-i", src_v,
-            "-t", f"{dur:.2f}",
+            "-t", "{0:.2f}".format(dur),
             "-vf", vf,
             "-r", str(FPS),
-            "-c:v", "libx264", "-crf", "16", "-preset", "veryfast",
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
             "-an", "-pix_fmt", "yuv420p",
             out
         ]
         run_ffmpeg(cmd)
         files.append(out)
         if progress:
-            progress(int(50 + 35 * (k + 1) / total), f"Монтаж кадра {k + 1}/{total}")
+            progress(int(50 + 35 * (k + 1) / total), "Montage seg {0}/{1}".format(k + 1, total))
     return files
 
 
 def concat(segs, tmpdir):
     with open(os.path.join(tmpdir, "concat.txt"), "w", encoding="utf-8") as f:
         for s in segs:
-            f.write(f"file '{os.path.basename(s)}'\n")
+            f.write("file '{0}'\n".format(os.path.basename(s)))
     out = os.path.join(tmpdir, "base.mp4")
     run_ffmpeg(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
                 "-i", "concat.txt", "-c", "copy", "base.mp4"], cwd=tmpdir)
@@ -162,10 +157,10 @@ def transcribe(wav, progress=None):
     if _whisper_model is None:
         name = os.environ.get("WHISPER_MODEL", "small")
         if progress:
-            progress(None, f"Загружаю модель Whisper ({name}):")
+            progress(None, "Loading Whisper {0}:".format(name))
         _whisper_model = whisper.load_model(name)
     if progress:
-        progress(None, "Распознаю текст песни...")
+        progress(None, "Transcribing audio:")
     return _whisper_model.transcribe(wav, language="ru", word_timestamps=True,
                                      initial_prompt="Переведи текст песни.")
 
@@ -197,7 +192,7 @@ def _ts(t):
     h = int(t // 3600)
     m = int((t % 3600) // 60)
     s = t % 60
-    return f"{h}:{m:02d}:{s:05.2f}"
+    return "{0}:{1:02d}:{2:05.2f}".format(h, m, s)
 
 
 def write_ass(lines, path):
@@ -210,8 +205,7 @@ WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, 
-StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Impact,74,&H00FFFF00,&H00FF0000,&H000000CC,&H96000000,-1,0,0,0,100,100,0,0,1,4,3,2,60,60,340,1
 Style: Chorus,Impact,100,&H00FFFFFF,&H00800000,&H000000CC,&H96000000,-1,0,0,0,100,100,0,0,1,5,5,2,60,60,330,1
 
@@ -220,7 +214,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """)
         for st, en, txt in lines:
             style = "Chorus" if (en - st) >= 2.4 else "Default"
-            f.write('Dialogue: 0,{s},{e},{style},,0,0,0,,{{\\fad(80,80)}}{txt}\n'.format(s=_ts(st), e=_ts(en), style=style, txt=txt))
+            f.write("Dialogue: 0,{0},{1},{2},,0,0,0,,{{\\fad(80,80)}}{3}\n".format(_ts(st), _ts(en), style, txt))
 
 
 def make_gradient(path):
@@ -228,10 +222,9 @@ def make_gradient(path):
 
     g = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     px = g.load()
-    # Сильный чёрный градиент снизу вверх
     for y in range(H):
         t = max(0, (y - 1400) / 520)
-        alpha = int(220 * t**1.8)
+        alpha = int(220 * t ** 1.8)
         for x in range(W):
             px[x, y] = (0, 0, 0, alpha)
     g.save(path)
@@ -239,30 +232,28 @@ def make_gradient(path):
 
 def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb):
     dur = max(duration, 1.0)
-    # target_mb — желаемый размер в ДЕСЯТИЧНЫХ МБ (Telegram limit = 50_000_000 байт)
-    budget_kbps = int(target_mb * 1000 * 1000 * 8 / dur / 1000)
-    mr = max(2500, min(budget_kbps, 7500))  # 2.5..7.5 Mbps ceiling
+    limit_bytes = int(target_mb * 1000 * 1000)
+    target_kbps = max(2500, int(limit_bytes * 8 / dur / 1000))
+    mr = min(target_kbps, 7500)
     buf = int(mr * 2)
     fade = max(dur - 0.4, 0.1)
-    grade = (f"[bg]eq=contrast=1.04:saturation=1.05,"
-             f"fade=t=out:st={fade:.2f}:d=0.4[v0]")
+    grade = ("[bg]eq=contrast=1.04:saturation=1.05,"
+             "fade=t=out:st={0:.2f}:d=0.4[v0]".format(fade))
     tail = "[v0]ass=subs.ass[v]" if has_ass else "[v0]null[v]"
-    fc = f"[0:v][1:v]overlay=0:0[bg];{grade};{tail}"
+    fc = "[0:v][1:v]overlay=0:0[bg];{0};{1}".format(grade, tail)
     run_ffmpeg(["ffmpeg", "-y", "-i", base, "-i", grad, "-i", audio_src,
                 "-filter_complex", fc,
                 "-map", "[v]", "-map", "2:a",
                 "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-                "-c:v", "libx264", "-crf", "23", "-preset", "medium",
-                "-maxrate", f"{mr}k", "-bufsize", f"{buf}k",
+                "-c:v", "libx264", "-crf", "22", "-preset", "medium",
+                "-maxrate", "{0}k".format(mr), "-bufsize", "{0}k".format(buf),
                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart", "-shortest", out_path], cwd=tmpdir)
-    return out_path
 
 
 def finalize(base, audio_src, grad, has_ass, duration, out_path, tmpdir, progress=None, target_mb=46):
-    dur = max(duration, 1.0)
     if progress:
-        progress(92, "Final render ({0}MB target)...".format(target_mb))
+        progress(92, "Final render")
     _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, target_mb)
     return out_path
 
@@ -297,7 +288,7 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
     tmp = os.path.join(job_dir, "tmp")
     os.makedirs(tmp, exist_ok=True)
 
-    progress(3, "Подготовка аудио...")
+    progress(3, "Подготовка аудио")
     duration = probe_duration(audio_src)
     if duration < 3:
         raise RuntimeError("Аудио слишком короткое")
@@ -305,14 +296,14 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
         raise RuntimeError("Аудио длиннее 11 минут")
     wav = extract_wav(audio_src, os.path.join(tmp, "track.wav"))
 
-    progress(8, "Анализ битов и кач-энергии...")
+    progress(8, "Анализ битов")
     beats, energy, tempo = analyze(wav, duration)
     cuts = plan_cuts(beats, energy, duration)
 
     ass_path = os.path.join(tmp, "subs.ass")
     has_ass = False
     if with_lyrics:
-        progress(18, "Распознавание текста (Whisper)...")
+        progress(18, "Распознавание текста")
         res = transcribe(wav, progress)
         lines = group_lines(res)
         if lines:
@@ -322,27 +313,50 @@ def build(audio_src, job_dir, mood, with_lyrics, progress=None, pin_cache=None):
     else:
         progress(38, "Без текста")
 
-    progress(40, "Загрузка видео-футажей...")
+    progress(40, "Получение фото/видео с Pinterest и Google")
     cache = pin_cache or os.path.join(job_dir, "vids")
     import video_fetch
-    videos = video_fetch.fetch(mood, 4, cache, job_dir, progress)
-    if not videos:
-        raise RuntimeError("Не удалось получить видео-футажи")
+    media = video_fetch.fetch(mood, 5, cache, job_dir, progress)
+    if not media:
+        raise RuntimeError("Не удалось получить фото/видео для эдита")
 
-    progress(50, "Про-монтаж под биты...")
+    # Convert images into slow-zoom clips so stills feel like "edit"
+    progress(46, "Подготовка исходников (CapCut-style)")
+    videos = []
+    for idx, f in enumerate(media):
+        ext = os.path.splitext(f)[1].lower()
+        if ext in (".jpg", ".jpeg", ".png", ".webp"):
+            zoomclip = os.path.join(tmp, "zoomclip_{0:02d}.mp4".format(idx))
+            if not os.path.exists(zoomclip):
+                frames = 10 * FPS
+                vf = ("scale=1400:1820,setsar=1,"
+                      "zoompan=z='1.0+0.12*on/{0}':d={1}:s=1080x1920:fps=30,"
+                      "format=yuv420p".format(frames, frames))
+                run_ffmpeg(["ffmpeg", "-y", "-loop", "1", "-i", f, "-vf", vf,
+                            "-frames:v", str(frames), "-c:v", "libx264", "-crf", "16",
+                            "-preset", "veryfast", "-r", str(FPS), "-an", "-pix_fmt", "yuv420p",
+                            zoomclip])
+            if os.path.exists(zoomclip):
+                videos.append(zoomclip)
+            continue
+        videos.append(f)
+
+    if not videos:
+        raise RuntimeError("Не удалось подготовить исходники")
+
+    progress(50, "Про-монтаж под биты")
     segs = build_segments(cuts, videos, tmp, progress)
 
-    progress(85, "Склейка потока...")
+    progress(85, "Склейка потока")
     base = concat(segs, tmp)
     grad = os.path.join(tmp, "gradient.png")
     make_gradient(grad)
 
     out_path = os.path.join(job_dir, "edit.mp4")
-    target_mb = max(24, int(duration * 0.45))
+    target_mb = max(30, int(duration * 0.55))
     finalize(base, audio_src, grad, has_ass, duration, out_path, tmp, progress, target_mb)
-    progress(96, "Разбиваю при необходимости...")
+
+    progress(96, "Разбивка при необходимости")
     parts = split_video(out_path, tmp, 47000000)
-    progress(100, "Готово!")
+    progress(100, "Готово")
     return {"out": out_path, "outs": parts, "tempo": tempo, "duration": duration}
-
-
