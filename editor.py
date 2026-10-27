@@ -224,7 +224,7 @@ def make_gradient(path):
     px = g.load()
     for y in range(H):
         t = max(0, (y - 1400) / 520)
-        alpha = int(220 * t ** 1.8)
+        alpha = int(90 * t ** 1.6)
         for x in range(W):
             px[x, y] = (0, 0, 0, alpha)
     g.save(path)
@@ -237,7 +237,7 @@ def _render_final(base, audio_src, grad, has_ass, duration, out_path, tmpdir, ta
     mr = min(target_kbps, 7500)
     buf = int(mr * 2)
     fade = max(dur - 0.4, 0.1)
-    grade = ("[bg]eq=contrast=1.04:saturation=1.05,"
+    grade = ("[bg]eq=contrast=1.03:saturation=1.08,brightness=0.02,"
              "fade=t=out:st={0:.2f}:d=0.4[v0]".format(fade))
     tail = "[v0]ass=subs.ass[v]" if has_ass else "[v0]null[v]"
     fc = "[0:v][1:v]overlay=0:0[bg];{0};{1}".format(grade, tail)
