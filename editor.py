@@ -212,8 +212,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, 
 StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Impact,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,6,3,2,60,60,340,1
-Style: Chorus,Impact,92,&H00FFFF00,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,7,4,2,60,60,330,1
+Style: Default,Impact,74,&H00FFFF00,&H00FF0000,&H000000CC,&H96000000,-1,0,0,0,100,100,0,0,1,4,3,2,60,60,340,1
+Style: Chorus,Impact,100,&H00FFFFFF,&H00800000,&H000000CC,&H96000000,-1,0,0,0,100,100,0,0,1,5,5,2,60,60,330,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -228,10 +228,12 @@ def make_gradient(path):
 
     g = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     px = g.load()
+    # Сильный чёрный градиент снизу вверх
     for y in range(H):
-        a = 0 if y < 1320 else int(180 * (((y - 1320) / 600) ** 1.5))
+        t = max(0, (y - 1400) / 520)
+        alpha = int(220 * t**1.8)
         for x in range(W):
-            px[x, y] = (0, 0, 0, a)
+            px[x, y] = (0, 0, 0, alpha)
     g.save(path)
 
 
